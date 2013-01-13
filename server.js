@@ -11,10 +11,19 @@ var eio = require('eio');
 var path = require('path');
 var exists = require('fs').exists || require('path').exists;
 var mime = require('mime');
+var mkdirp = require('mkdirp');
 
 // Increase number of threads to 1.5x the number of logical CPUs.
 var threads = Math.ceil(Math.max(4, require('os').cpus().length * 1.5));
 eio.setMinParallel(threads);
+
+
+// should we default to chunked encoding?
+var chunked = true;
+
+// should osmtile's be cached on demand?
+var cache = false;
+
 
 var root = "./www";
 var port = '8000';
@@ -24,6 +33,11 @@ var usage = 'usage: node server.js [stylesheet] [port] [root]';
 usage += '\n  default stylesheet: ' + stylesheet;
 usage += '\n  default port: ' + port;
 usage += '\n  default root directory: ' + root;
+
+if (process.argv.indexOf('-h') > -1 || process.argv.indexOf('--help') > -1) {
+    console.log(usage);
+    process.exit(0);
+}
 
 if (process.argv[2]) {
     stylesheet = process.argv[2];
@@ -41,21 +55,32 @@ var map_pool = pool({
     create: function(callback) {
         var obj = new mapnik.Map(256, 256);
         var opts = { strict: false };
+        try {
+            obj.loadSync(stylesheet, opts);
+            return callback(null,obj);
+        } catch (err) {
+            return callback(err);
+        }
+        /*
+        // async loading will trigger when calling Mapnik's datasource_cache::create
+        // if multiple tiles are accessed at the same time at first load
+        // TODO - is this a bug in Mapnik singleton impl?
         obj.load(stylesheet, opts, function(err,obj) {
             if (err) return callback(err);
             return callback(null,obj);
         });
+        */
     },
     destroy: function(obj) {
         delete obj;
     },
-    max: require('os').cpus().length
+    max: threads
 });
 
-var parse_url = function(req, callback) {
-    var matches = req.url.match(/(\d+)/g);
+var parse_url = function(uri, callback) {
+    var matches = uri.match(/(\d+)/g);
     if (matches && matches.length == 3) {
-        var format = path.extname(req.url);
+        var format = path.extname(uri);
         if (!format || !(format.indexOf('png') > -1 || format == '.osmtile')) {
             var msg = "Invalid format, only 'png' and 'osmtile' are supported";
             msg += ' (expected a url like /0/0/0.png or /0/0/0.osmtile';
@@ -86,7 +111,7 @@ var error = function(res,msg) {
     return res.end(msg);
 }
 
-var renderer = function(map, params, res) {
+var renderer = function(map, params, res, filepath, cache) {
     var bbox = mercator.bbox(params.x, params.y, params.z, false, '900913');
     map.extent = bbox;
     if (params.format == 'osmtile') {
@@ -95,22 +120,42 @@ var renderer = function(map, params, res) {
                 map_pool.release(map);
             });
             if (err) {
+                console.log(err);
                 return error(res,err.message)
             }
+            console.log("TILE(%d/%d/%d) OUTPUT len=%d", params.z, params.x, params.y, output.length);
             var content_length = output.length + 4;
             var head = new Buffer(4);
             head[0] = (output.length >> 24) & 0xff;
             head[1] = (output.length >> 16) & 0xff;
             head[2] = (output.length >>  8) & 0xff;
             head[3] = output.length & 0xff;
-            console.log("TILE(%d/%d/%d) OUTPUT len=%d", params.z, params.x, params.y, output.length);
-            res.useChunkedEncodingByDefault=false;
-            res.chunkedEncoding=false;
             res.writeHead(200,{'Content-length': content_length,
                                'Content-type': 'application/osmtile'
                               });
             res.write(head);
-            return res.end(output);
+            if (!chunked) {
+                res.useChunkedEncodingByDefault=false;
+                res.chunkedEncoding=false;
+            }
+            if (cache) {
+                var dirname = path.dirname(filepath);
+                mkdirp(dirname, function (err) {
+                      if (err) {
+                          console.log(err);
+                          return error(res,err.message)
+                      }
+                      fs.writeFile(filepath,output,function(err) {
+                            if (err) {
+                                console.log(err);
+                                return error(res,err.message)
+                            }
+                            return res.end(output);
+                      });
+                });
+            } else {
+                return res.end(output);
+            }
         });
     } else {
         var im = new mapnik.Image(map.width,map.height);
@@ -119,10 +164,12 @@ var renderer = function(map, params, res) {
                 map_pool.release(map);
             });
             if (err) {
+                console.log(err);
                 return error(res,err.message)
             }
             im.encode(params.format,function(err,buffer) {
                 if (err) {
+                    console.log(err);
                     return error(res,err.message)
                 }
                 res.writeHead(200, {'Content-Type': 'image/png'});
@@ -132,6 +179,7 @@ var renderer = function(map, params, res) {
     }
 };
 
+
 http.createServer(function(req, res) {
     var uri = url.parse(req.url).pathname;
     if (!uri || uri == '/') {
@@ -140,21 +188,46 @@ http.createServer(function(req, res) {
     }
     var filepath = path.join(root, uri);
     exists(filepath, function(exist) {
-        if (exist) {
-            res.writeHead(200, {'Content-Type': mime.lookup(filepath)});
-            return res.end(fs.readFileSync(filepath));
-        }
-        parse_url(req, function(err,params) {
-            if (err) {
-                return error(res,err.message);
+        var format = path.extname(uri);
+        if (exist && ((format == '.osmtile') && cache) || (format != '.osmtile')) {
+            if (format == '.osmtile') {
+                fs.readFile(filepath,function(err,output) {
+                    if (err) {
+                        console.log(err);
+                        return error(res,err.message);
+                    }
+                    var content_length = output.length + 4;
+                    var head = new Buffer(4);
+                    head[0] = (output.length >> 24) & 0xff;
+                    head[1] = (output.length >> 16) & 0xff;
+                    head[2] = (output.length >>  8) & 0xff;
+                    head[3] = output.length & 0xff;
+                    res.writeHead(200,{'Content-length': content_length,
+                                       'Content-type': 'application/osmtile'
+                                      });
+                    res.write(head);
+                    //console.log('serving osmtile from cache!');
+                    return res.end(output);
+                });
+            } else {
+                res.writeHead(200, {'Content-Type': mime.lookup(filepath)});
+                return res.end(fs.readFileSync(filepath));
             }
-            map_pool.acquire(function(err, map) {
+        } else {
+            parse_url(uri, function(err,params) {
                 if (err) {
-                    return error(res,err.message)
+                    console.log(err);
+                    return error(res,err.message);
                 }
-                return renderer(map,params,res);
+                map_pool.acquire(function(err, map) {
+                    if (err) {
+                        console.log(err);
+                        return error(res,err.message)
+                    }
+                    return renderer(map,params,res,filepath,cache);
+                });
             });
-        });
+        }
     });
 }).listen(port);
 
