@@ -32,7 +32,9 @@
 // boost
 #include <boost/utility.hpp>
 #include <boost/make_shared.hpp>
-
+#include "agg_basics.h"
+#include "agg_path_storage.h"
+#include "agg_conv_clipper.h"
 namespace mapnik
 {
 
@@ -99,26 +101,25 @@ void vector_renderer<T>::process(polygon_symbolizer const& sym,
 {
     agg::trans_affine tr;
     evaluate_transform(tr, feature, sym.get_transform());
-    typedef boost::mpl::vector<clip_poly_tag,transform_tag,affine_transform_tag,simplify_tag,smooth_tag> conv_types;
+    typedef boost::mpl::vector<transform_tag,affine_transform_tag,simplify_tag,smooth_tag> conv_types;
+    agg::path_storage ps;
 
-    box2d<double> clipping_extent = query_extent_;
-	if (sym.clip())
-	{
-		double padding = (double) (query_extent_.width() / width_);
-		padding *= 2;
-		double x0 = query_extent_.minx();
-		double y0 = query_extent_.miny();
-		double x1 = query_extent_.maxx();
-		double y1 = query_extent_.maxy();
-		clipping_extent.init(x0 - padding, y0 - padding, x1 + padding,
-				y1 + padding);
-	}
+    double padding = (double) (query_extent_.width() / width_);
+    padding *= 2;
+    double x0 = query_extent_.minx();
+    double y0 = query_extent_.miny();
+    double x1 = query_extent_.maxx();
+    double y1 = query_extent_.maxy();
+    ps.move_to(x0 - padding, y0 - padding);
+    ps.line_to(x0 - padding, y1 + padding);
+    ps.line_to(x1 + padding, y1 + padding);
+    ps.line_to(x1 + padding, y0 - padding);
+    ps.close_polygon();
 
     vertex_converter<box2d<double>, backend_type, polygon_symbolizer,
                      CoordTransform, proj_transform, agg::trans_affine, conv_types>
-        converter(clipping_extent,backend_,sym,t_,prj_trans,tr,scale_factor_);
+    converter(query_extent_,backend_,sym,t_,prj_trans,tr,scale_factor_);
 
-    if (prj_trans.equal() && sym.clip()) converter.template set<clip_poly_tag>(); //optional clip (default: true)
     converter.template set<transform_tag>(); //always transform
     converter.template set<affine_transform_tag>();
     if (sym.simplify_tolerance() > 0.0) converter.template set<simplify_tag>(); // optional simplify converter
@@ -130,7 +131,10 @@ void vector_renderer<T>::process(polygon_symbolizer const& sym,
     {
         if (geom.size() > 2)
         {
-            converter.apply(geom);
+            agg::conv_clipper<geometry_type, agg::path_storage> clp(geom, ps, agg::clipper_and, agg::clipper_non_zero, agg::clipper_non_zero);
+            // this seems to make it clockwise
+            clp.reverse(true);
+            converter.apply(clp);
         }
     }
 
