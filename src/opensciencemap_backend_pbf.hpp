@@ -52,6 +52,7 @@ struct opensciencemap_backend_pbf
         tags_type tags;
         path_type path;
         index_type index;
+        int32_t prio;
     };
 
 private:
@@ -109,6 +110,13 @@ public:
                             custom_values_.push_back(val.to_string());
                             element_->tags.push_back((1023 + tags_.size()));
                         }
+                    }
+                }
+                else
+                {
+                    if (name == "height")
+                    {
+                        element_->prio = atoi(val.to_string().c_str());
                     }
                 }
             }
@@ -233,6 +241,9 @@ public:
 
                 if (element)
                 {
+                    if (elem.prio > 0)
+                        element->set_priority(static_cast<unsigned int>(elem.prio));
+
                     // optional uint32 num_indices = 1 [default = 1];
                     if (elem.index.size() > 1)
                     {
