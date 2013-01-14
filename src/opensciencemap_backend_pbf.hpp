@@ -127,80 +127,45 @@ public:
         path.rewind(0);
         unsigned count = 0;
         int32_t prev_x=0, prev_y=0;
-        // check for straight horizontal and vertical
-        // movement and drop them but the last
-        //int32_t pprev_x=0, pprev_y=0;
+        bool end_poly = false;
 
         if (element_.get())
         {
             uint32_t start = element_->path.size();
-            vtx.cmd = path.vertex(&vtx.x, &vtx.y);
-            double start_x = vtx.x;
-            double start_y = vtx.y;
-//            double second_x = 0;
-//            double second_y = 0;
-
-            while (vtx.cmd != SEG_END)
+            while ((vtx.cmd = path.vertex(&vtx.x, &vtx.y)) != SEG_END)
             {
                 unsigned int cmd = vtx.cmd;
                 double x = vtx.x;
                 double y = vtx.y;
 
-                // peek next command
-                vtx.cmd = path.vertex(&vtx.x, &vtx.y);
-
-                int32_t cur_x = static_cast<int32_t>(x * SCALE);
-                int32_t cur_y = static_cast<int32_t>(y * SCALE);
-
                 if (element_->type == Polygon)
                 {
                     //std::cout << cmd << ' ' << x << ' ' << y << '\n';
-                    if (vtx.cmd != SEG_LINETO)
+                    if (cmd == SEG_CLOSE)
                     {
-                        if (x == start_x && y == start_y)
+                        if (end_poly)
                         {
-                            std::cout << "drop closing\n";
-                            // drop closing point
+                            //uint32_t size = element_->path.size() - start;
+                            //std::cout << "closing " << size << '\n';
+                            element_->index.push_back(0);
+                            start = element_->path.size();
+                        }
+                        else
+                        {
                             uint32_t size = element_->path.size() - start;
+                            //std::cout << "next " << size << '\n';
                             element_->index.push_back(size);
                             start = element_->path.size();
-                            continue;
                         }
-//                        else if ((x == start_x && x == second_x)
-//                                || (y == start_y && y == second_y))
-//                        {
-//                            std::cout << "drop garbage\n";
-//                            // drop wrong points introduced by clipping...
-//                            path_type::iterator next = element_->path.erase(
-//                                    element_->path.begin()); //+start);
-//                            next->first =
-//                                    static_cast<int32_t>(second_x * SCALE);
-//                            next->second =
-//                                    static_cast<int32_t>(second_y * SCALE);
-//                        }
-                    }
 
-//                    if (count == 1)
-//                    {
-//                        second_x = x;
-//                        second_y = y;
-//                    }
-//                    // clipping seems to introduce some rather strange points
-//                    // should be save to remove 0 angle segments anyway
-//                    else if (count > 1)
-//                    {
-//                        if ((pprev_x == prev_x && prev_x == cur_x)
-//                                || (pprev_y == prev_y && prev_y == cur_y))
-//                        {
-//                            std::cout << "drop last\n";
-//                            element_->path.pop_back();
-//                            prev_x = pprev_x;
-//                            prev_y = pprev_y;
-//                            count--;
-//                        }
-//                    }
+                        end_poly = true;
+                        continue;
+                    }
+                    end_poly = false;
                 }
 
+                int32_t cur_x = static_cast<int32_t>(x * SCALE);
+                int32_t cur_y = static_cast<int32_t>(y * SCALE);
                 int32_t dx = cur_x - prev_x;
                 int32_t dy = cur_y - prev_y;
                 if (count > 0 && cmd == SEG_LINETO &&
@@ -217,16 +182,13 @@ public:
                     start = element_->path.size();
 
                     // make sure items are separated unless it is really a hole
-                    if (element_->type == Polygon)
-                        element_->index.push_back(0);
+                    //if (element_->type == Polygon)
+                    //    element_->index.push_back(0);
                 }
 
                 if (cmd == SEG_LINETO || cmd == SEG_MOVETO)
                 {
                     element_->path.push_back(coord_type(dx, dy));
-//                    pprev_x = prev_x;
-//                    pprev_y = prev_y;
-
                     prev_x = cur_x;
                     prev_y = cur_y;
                     ++count;

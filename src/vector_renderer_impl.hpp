@@ -122,7 +122,8 @@ void vector_renderer<T>::process(polygon_symbolizer const& sym,
 
     converter.template set<transform_tag>(); //always transform
     converter.template set<affine_transform_tag>();
-    if (sym.simplify_tolerance() > 0.0) converter.template set<simplify_tag>(); // optional simplify converter
+    if (sym.simplify_tolerance() > 0.0)
+        converter.template set<simplify_tag>(); // optional simplify converter
     if (sym.smooth() > 0.0) converter.template set<smooth_tag>(); // optional smooth converter
 
     backend_.start_tile_element(feature, Polygon);
@@ -131,7 +132,8 @@ void vector_renderer<T>::process(polygon_symbolizer const& sym,
     {
         if (geom.size() > 2)
         {
-            agg::conv_clipper<geometry_type, agg::path_storage> clp(geom, ps, agg::clipper_and, agg::clipper_non_zero, agg::clipper_non_zero);
+            agg::conv_clipper<geometry_type, agg::path_storage> clp(geom, ps,
+                    agg::clipper_and, agg::clipper_non_zero, agg::clipper_non_zero);
             // this seems to make it clockwise
             clp.reverse(true);
             converter.apply(clp);
