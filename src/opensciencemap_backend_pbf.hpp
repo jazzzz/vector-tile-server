@@ -126,40 +126,108 @@ public:
         vertex2d vtx(vertex2d::no_init);
         path.rewind(0);
         unsigned count = 0;
-        int32_t x=0,y=0;
+        int32_t prev_x=0, prev_y=0;
+        // check for straight horizontal and vertical
+        // movement and drop them but the last
+        int32_t pprev_x=0, pprev_y=0;
 
         if (element_.get())
         {
             uint32_t start = element_->path.size();
-            while ((vtx.cmd = path.vertex(&vtx.x, &vtx.y)) != SEG_END)
+            vtx.cmd = path.vertex(&vtx.x, &vtx.y);
+            double start_x = vtx.x;
+            double start_y = vtx.y;
+            double second_x = 0;
+            double second_y = 0;
+
+            while (vtx.cmd != SEG_END)
             {
-                int32_t cur_x = static_cast<int32_t>(vtx.x * SCALE);
-                int32_t cur_y = static_cast<int32_t>(vtx.y * SCALE);
-                int32_t dx = cur_x - x;
-                int32_t dy = cur_y - y;
-                if (count > 0 && vtx.cmd == SEG_LINETO &&
+                unsigned int cmd = vtx.cmd;
+                double x = vtx.x;
+                double y = vtx.y;
+
+                // peek next command
+                vtx.cmd = path.vertex(&vtx.x, &vtx.y);
+
+                //if (element_->type == Polygon)
+                //	std::cout << cmd << ' ' << x << ' ' << y << '\n';
+
+                int32_t cur_x = static_cast<int32_t>(x * SCALE);
+                int32_t cur_y = static_cast<int32_t>(y * SCALE);
+
+                if (element_->type == Polygon)
+                {
+                    if (vtx.cmd != SEG_LINETO)
+                    {
+                        if (x == start_x && y == start_y)
+                        {
+                            // drop closing point
+                            uint32_t size = element_->path.size() - start;
+                            element_->index.push_back(size);
+                            start = element_->path.size();
+                            continue;
+                        }
+                        else if ((x == start_x && x == second_x)
+                                || (y == start_y && y == second_y))
+                        {
+                            // drop wrong points introduced by clipping...
+                            path_type::iterator next = element_->path.erase(
+                                    element_->path.begin()); //+start);
+                            next->first =
+                                    static_cast<int32_t>(second_x * SCALE);
+                            next->second =
+                                    static_cast<int32_t>(second_y * SCALE);
+                        }
+                    }
+
+                    if (count == 1)
+                    {
+                        second_x = x;
+                        second_y = y;
+                    }
+                    // clipping seems to introduce some rather strange points
+                    // should be save to remove 0 angle segments anyway
+                    else if (count > 1)
+                    {
+                        if ((pprev_x == prev_x && prev_x == cur_x)
+                                || (pprev_y == prev_y && prev_y == cur_y))
+                        {
+                            element_->path.pop_back();
+                            prev_x = pprev_x;
+                            prev_y = pprev_y;
+                            count--;
+                        }
+                    }
+                }
+
+                int32_t dx = cur_x - prev_x;
+                int32_t dy = cur_y - prev_y;
+                if (count > 0 && cmd == SEG_LINETO &&
                     std::fabs(dx) < 1.0 &&
                     std::fabs(dy) < 1.0)
                 {
                     continue;
                 }
 
-                if (vtx.cmd == SEG_MOVETO && element_->path.size() > start)
+                if (cmd == SEG_MOVETO && element_->path.size() > start)
                 {
                     uint32_t size = element_->path.size() - start;
                     element_->index.push_back(size);
                     start = element_->path.size();
                 }
 
-                if (vtx.cmd == SEG_LINETO || vtx.cmd == SEG_MOVETO)
+                if (cmd == SEG_LINETO || cmd == SEG_MOVETO)
                 {
-                    element_->path.push_back(coord_type(dx,dy));
-                }
+                    element_->path.push_back(coord_type(dx, dy));
+                    pprev_x = prev_x;
+                    pprev_y = prev_y;
 
-                x = cur_x;
-                y = cur_y;
-                ++count;
+                    prev_x = cur_x;
+                    prev_y = cur_y;
+                    ++count;
+                }
             }
+
             if (element_->path.size() > start)
             {
                 uint32_t size = element_->path.size() - start;
