@@ -215,6 +215,10 @@ public:
                     uint32_t size = element_->path.size() - start;
                     element_->index.push_back(size);
                     start = element_->path.size();
+
+                    // make sure items are separated unless it is really a hole
+                    if (element_->type == Polygon)
+                        element_->index.push_back(0);
                 }
 
                 if (cmd == SEG_LINETO || cmd == SEG_MOVETO)
