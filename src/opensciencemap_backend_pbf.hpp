@@ -52,6 +52,7 @@ struct opensciencemap_backend_pbf
         tags_type tags;
         path_type path;
         index_type index;
+        int32_t prio;
     };
 
 private:
@@ -111,6 +112,13 @@ public:
                         }
                     }
                 }
+                else
+                {
+                    if (name == "height")
+                    {
+                        element_->prio = atoi(val.to_string().c_str());
+                    }
+                }
             }
         }
     }
@@ -126,40 +134,75 @@ public:
         vertex2d vtx(vertex2d::no_init);
         path.rewind(0);
         unsigned count = 0;
-        int32_t x=0,y=0;
+        int32_t prev_x=0, prev_y=0;
+        bool end_poly = false;
 
         if (element_.get())
         {
             uint32_t start = element_->path.size();
             while ((vtx.cmd = path.vertex(&vtx.x, &vtx.y)) != SEG_END)
             {
-                int32_t cur_x = static_cast<int32_t>(vtx.x * SCALE);
-                int32_t cur_y = static_cast<int32_t>(vtx.y * SCALE);
-                int32_t dx = cur_x - x;
-                int32_t dy = cur_y - y;
-                if (count > 0 && vtx.cmd == SEG_LINETO &&
+                unsigned int cmd = vtx.cmd;
+                double x = vtx.x;
+                double y = vtx.y;
+
+                if (element_->type == Polygon)
+                {
+                    //std::cout << cmd << ' ' << x << ' ' << y << '\n';
+                    if (cmd == SEG_CLOSE)
+                    {
+                        if (end_poly)
+                        {
+                            //uint32_t size = element_->path.size() - start;
+                            //std::cout << "closing " << size << '\n';
+                            element_->index.push_back(0);
+                            start = element_->path.size();
+                        }
+                        else
+                        {
+                            uint32_t size = element_->path.size() - start;
+                            //std::cout << "next " << size << '\n';
+                            element_->index.push_back(size);
+                            start = element_->path.size();
+                        }
+
+                        end_poly = true;
+                        continue;
+                    }
+                    end_poly = false;
+                }
+
+                int32_t cur_x = static_cast<int32_t>(x * SCALE);
+                int32_t cur_y = static_cast<int32_t>(y * SCALE);
+                int32_t dx = cur_x - prev_x;
+                int32_t dy = cur_y - prev_y;
+                if (count > 0 && cmd == SEG_LINETO &&
                     std::fabs(dx) < 1.0 &&
                     std::fabs(dy) < 1.0)
                 {
                     continue;
                 }
 
-                if (vtx.cmd == SEG_MOVETO && element_->path.size() > start)
+                if (cmd == SEG_MOVETO && element_->path.size() > start)
                 {
                     uint32_t size = element_->path.size() - start;
                     element_->index.push_back(size);
                     start = element_->path.size();
+
+                    // make sure items are separated unless it is really a hole
+                    //if (element_->type == Polygon)
+                    //    element_->index.push_back(0);
                 }
 
-                if (vtx.cmd == SEG_LINETO || vtx.cmd == SEG_MOVETO)
+                if (cmd == SEG_LINETO || cmd == SEG_MOVETO)
                 {
-                    element_->path.push_back(coord_type(dx,dy));
+                    element_->path.push_back(coord_type(dx, dy));
+                    prev_x = cur_x;
+                    prev_y = cur_y;
+                    ++count;
                 }
-
-                x = cur_x;
-                y = cur_y;
-                ++count;
             }
+
             if (element_->path.size() > start)
             {
                 uint32_t size = element_->path.size() - start;
@@ -198,6 +241,9 @@ public:
 
                 if (element)
                 {
+                    if (elem.prio > 0)
+                        element->set_priority(static_cast<unsigned int>(elem.prio));
+
                     // optional uint32 num_indices = 1 [default = 1];
                     if (elem.index.size() > 1)
                     {

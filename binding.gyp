@@ -14,6 +14,7 @@
       },
       'include_dirs': [
           'node_modules/mapnik/src',
+          '../mapnik/deps/agg/include',
       ],
       'conditions': [
         ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" or OS=="mac"', {
@@ -35,9 +36,11 @@
         }],
       ],
       'sources': [
+		'./src/clipper.cpp',
+		'./src/agg_conv_clipper.hpp',		
         './src/tags.cpp',
         './src/vector_renderer.cpp',
-        './src/TileData.pb.cc'
+        './src/TileData.pb.cc',
       ],
   },
   'targets': [
