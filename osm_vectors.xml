@@ -65,12 +65,12 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>polygon</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select *,
+       <Parameter name="table">(select "way","access","addr:housename","addr:housenumber","addr:interpolation","admin_level","aerialway","aeroway","amenity","area","barrier","bicycle","boundary","brand","bridge","building","construction","covered","culvert","cutting","denomination","disused","embankment","foot","generator:source","harbour","highway","historic","horse","intermittent","junction","landuse","layer","leisure","lock","man_made","military","motorcar","name","natural","oneway","operator","osm_id","place","population","power","power_source","railway","ref","religion","route","service","shop","sport","surface","toll","tourism","tower:type","tracktype","tunnel","water","waterway","way_area","wetland","width","wood","z_order",
        	(case when building is null then
        	null
        	else case 
-		when substring(tags->'height', '[0-9]+\.?[0-9]*') is not null 
-		then (substring(tags->'height', '[0-9]+\.?[0-9]*'))::float
+		when substring(height, '[0-9]+\.?[0-9]*') is not null 
+		then (substring(height, '[0-9]+\.?[0-9]*'))::float
 		when substring(tags->'building:levels', '[0-9]+') is not null 
 		then greatest(substring(tags->'building:levels', '[0-9]+')::integer * 4.2, 8)
 		else null
