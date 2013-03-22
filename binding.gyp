@@ -14,7 +14,8 @@
       },
       'include_dirs': [
           'node_modules/mapnik/src',
-          '../mapnik/deps/agg/include',
+          'src',
+          '/usr/include/mapnik/agg'
       ],
       'conditions': [
         ['OS=="linux" or OS=="freebsd" or OS=="openbsd" or OS=="netbsd" or OS=="mac"', {
