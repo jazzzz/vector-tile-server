@@ -7,7 +7,7 @@
 <Map srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over" background-color="#c4dff6" maximum-extent="-20037508.34,-20037508.34,20037508.34,20037508.34">
 
  <Datasource name="osm">
-       <Parameter name="dbname">gis-2.0</Parameter>
+       <Parameter name="dbname">osm</Parameter>
        <Parameter name="extent">-20037508.34 -20037508.34 20037508.34 20037508.34</Parameter>
        <Parameter name="geometry_field">way</Parameter>
        <Parameter name="type">postgis</Parameter>
@@ -76,7 +76,7 @@
 		else null
 		end 
 		end)::text as height
-	from osm_polygon where boundary is null or boundary != 'administrative') as osm_polygon</Parameter>
+	from planet_osm_polygon where boundary is null or boundary != 'administrative') as osm_polygon</Parameter>
     </Datasource>
   </Layer>
 
@@ -84,7 +84,7 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>polygon_z14</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select * from osm_polygon where landuse is not null or "natural" is not null or leisure is not null or waterway is not null) as osm_polygon</Parameter>
+       <Parameter name="table">(select * from planet_osm_polygon where landuse is not null or "natural" is not null or leisure is not null or waterway is not null) as osm_polygon</Parameter>
     </Datasource>
 </Layer>
   
@@ -93,7 +93,7 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>line</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select * from osm_line where osm_id > 0) as osm_line</Parameter>
+       <Parameter name="table">(select * from planet_osm_line where osm_id > 0) as osm_line</Parameter>
     </Datasource>
   </Layer>
 
@@ -102,7 +102,7 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>roads</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select name,highway,oneway,ref,way from osm_roads where osm_id > 0 and highway='motorway') as roads</Parameter>
+       <Parameter name="table">(select name,highway,oneway,ref,way from planet_osm_roads where osm_id > 0 and highway='motorway') as roads</Parameter>
     </Datasource>
   </Layer>
 
@@ -111,7 +111,7 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>point</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select * from osm_point where osm_id > 0) as points</Parameter>
+       <Parameter name="table">(select * from planet_osm_point where osm_id > 0) as points</Parameter>
     </Datasource>
 </Layer>
 
@@ -121,7 +121,7 @@
   srs="+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0.0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs +over">
     <StyleName>city</StyleName>
     <Datasource base="osm">
-       <Parameter name="table">(select * from osm_point where osm_id > 0 and place='city') as city</Parameter>
+       <Parameter name="table">(select * from planet_osm_point where osm_id > 0 and place='city') as city</Parameter>
     </Datasource>
 </Layer>
 
